@@ -437,6 +437,7 @@ impl From<RouteMessage> for Route {
         let mut destination = None;
         let mut ifindex = None;
         let mut metric = None;
+        let mut table = msg.header.table as u32;
 
         for attr in msg.attributes {
             match attr {
@@ -458,6 +459,9 @@ impl From<RouteMessage> for Route {
                 RouteAttribute::Priority(priority) => {
                     metric = Some(priority);
                 }
+                RouteAttribute::Table(real_table) => {
+                    table = real_table;
+                }
                 _ => {}
             }
         }
@@ -475,7 +479,7 @@ impl From<RouteMessage> for Route {
             source_hint,
             gateway,
             ifindex,
-            table: msg.header.table,
+            table,
             metric,
         }
     }

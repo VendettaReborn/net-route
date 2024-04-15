@@ -118,7 +118,7 @@ pub struct Route {
 
     #[cfg(target_os = "linux")]
     /// The routing table this route belongs to.
-    pub table: u8,
+    pub table: u32,
 
     /// Network address of the source.
     #[cfg(target_os = "linux")]
@@ -183,7 +183,7 @@ impl Route {
 
     /// Set table the route will be installed in.
     #[cfg(target_os = "linux")]
-    pub fn with_table(mut self, table: u8) -> Self {
+    pub fn with_table(mut self, table: u32) -> Self {
         self.table = table;
         self
     }
