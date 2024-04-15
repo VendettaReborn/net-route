@@ -41,6 +41,7 @@ use std::{
 };
 
 mod platform_impl;
+use netlink_packet_route::IpProtocol;
 use platform_impl::PlatformHandle;
 
 #[cfg(all(target_os = "macos", not(doc)))]
@@ -77,6 +78,21 @@ impl Handle {
     /// Remove a route from the system's routing table.
     pub async fn delete(&self, route: &Route) -> io::Result<()> {
         self.0.delete(route).await
+    }
+
+    #[cfg(target_os = "linux")]
+    pub async fn add_rules(&self, rules: Vec<Rule>) -> io::Result<()> {
+        self.0.add_rules(rules).await
+    }
+
+    #[cfg(target_os = "linux")]
+    pub async fn list_rules(&self) -> io::Result<Vec<netlink_packet_route::rule::RuleMessage>> {
+        self.0.list_rules().await
+    }
+
+    #[cfg(target_os = "linux")]
+    pub async fn delete_rules(&self, rules: Vec<Rule>) -> io::Result<()> {
+        self.0.delete_rules(rules).await
     }
 }
 
@@ -211,6 +227,20 @@ impl Route {
             )),
         }
     }
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct Rule {
+    pub src: Option<Ipv4Addr>,
+    pub dst: Option<Ipv4Addr>,
+    pub input_interface: Option<String>,
+    pub output_interface: Option<String>,
+    pub table_id: Option<u32>,
+    pub priority: Option<u32>,
+    pub fw_mark_mask: Option<(u32, u32)>,
+    pub protocol: Option<IpProtocol>,
+    pub v6: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

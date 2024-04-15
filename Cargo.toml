@@ -29,7 +29,7 @@ async-stream = "0.3.3"
 
 
 [target.'cfg(target_os = "linux")'.dependencies]
-rtnetlink = "0.14"
+rtnetlink = { git = "https://github.com/Watfaq/rtnetlink.git", rev = "68631029a37246bb261447e559be02a34b68acb1"}
 netlink-sys = "0.8.5"
 netlink-packet-core = "0.7.0"
 netlink-packet-route = "0.19"

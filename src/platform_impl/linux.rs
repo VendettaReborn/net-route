@@ -1,10 +1,11 @@
-use crate::{Route, RouteChange};
+use crate::{Route, RouteChange, Rule};
 use std::io::{self, Error};
 
 use async_stream::stream;
 use futures::{channel::mpsc::UnboundedReceiver, stream::TryStreamExt};
 use futures::{Stream, StreamExt};
 use netlink_packet_core::{NetlinkMessage, NetlinkPayload};
+use netlink_packet_route::rule::{RuleAttribute, RuleMessage};
 use netlink_packet_route::{
     route::{RouteAddress, RouteAttribute, RouteMessage},
     AddressFamily, RouteNetlinkMessage,
@@ -74,6 +75,139 @@ impl Handle {
             }
         }
         Ok(None)
+    }
+
+    pub(crate) async fn list_rules(&self) -> io::Result<Vec<RuleMessage>> {
+        let mut rules = vec![];
+        let mut rule_messages = self.handle.rule().get(rtnetlink::IpVersion::V4).execute();
+
+        while let Some(rule) = rule_messages
+            .try_next()
+            .await
+            .map_err(|e| Error::new(io::ErrorKind::Other, e.to_string()))?
+        {
+            rules.push(rule.into());
+        }
+
+        let mut rule_messages = self.handle.rule().get(rtnetlink::IpVersion::V6).execute();
+
+        while let Some(rule) = rule_messages
+            .try_next()
+            .await
+            .map_err(|e| Error::new(io::ErrorKind::Other, e.to_string()))?
+        {
+            rules.push(rule.into());
+        }
+        Ok(rules)
+    }
+
+    pub(crate) async fn add_rules(&self, rules: Vec<Rule>) -> io::Result<()> {
+        for rule in rules {
+            let mut req = self.handle.rule().add();
+            // the default action is unspec, which doesn't work here
+            req.message_mut().header.action = netlink_packet_route::rule::RuleAction::ToTable;
+            // the src & dst is not supported in the common api, so we have to handle it manully
+            if let Some(input_interface) = rule.input_interface {
+                req = req.input_interface(input_interface);
+            }
+            if let Some(output_interface) = rule.output_interface {
+                req = req.output_interface(output_interface);
+            }
+            if let Some(table_id) = rule.table_id {
+                req = req.table_id(table_id);
+            }
+            if let Some(priority) = rule.priority {
+                req = req.priority(priority);
+            }
+            if let Some((fw_mark, fw_mask)) = rule.fw_mark_mask {
+                req.message_mut()
+                    .attributes
+                    .push(RuleAttribute::FwMark(fw_mark));
+                req.message_mut()
+                    .attributes
+                    .push(RuleAttribute::FwMask(fw_mask));
+            }
+            if let Some(protocol) = rule.protocol {
+                req.message_mut()
+                    .attributes
+                    .push(RuleAttribute::IpProtocol(protocol));
+            }
+            req = req.replace();
+            if rule.v6 {
+                req.v6()
+                    .execute()
+                    .await
+                    .map_err(|e| Error::new(io::ErrorKind::Other, e.to_string()))?;
+            } else {
+                let mut req = req.v4();
+                if let Some(src) = rule.src {
+                    req = req.source_prefix(src, 32);
+                }
+                if let Some(dst) = rule.dst {
+                    req = req.destination_prefix(dst, 32);
+                }
+                req.execute()
+                    .await
+                    .map_err(|e| Error::new(io::ErrorKind::Other, e.to_string()))?;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn delete_rules(&self, rules: Vec<Rule>) -> io::Result<()> {
+        for rule in rules {
+            let message = RuleMessage::default();
+            let mut req = self.handle.rule().del(message);
+            req.message_mut().header.action = netlink_packet_route::rule::RuleAction::ToTable;
+            if let Some(src) = rule.src {
+                req.message_mut()
+                    .attributes
+                    .push(RuleAttribute::Source(IpAddr::V4(src)));
+            }
+            if let Some(dst) = rule.dst {
+                req.message_mut()
+                    .attributes
+                    .push(RuleAttribute::Destination(IpAddr::V4(dst)));
+            }
+            if let Some(ifname) = rule.input_interface {
+                req.message_mut()
+                    .attributes
+                    .push(RuleAttribute::Iifname(ifname));
+            }
+            if let Some(ifname) = rule.output_interface {
+                req.message_mut()
+                    .attributes
+                    .push(RuleAttribute::Oifname(ifname));
+            }
+            if let Some(table_id) = rule.table_id {
+                req.message_mut()
+                    .attributes
+                    .push(RuleAttribute::Table(table_id));
+            }
+            if let Some(priority) = rule.priority {
+                req.message_mut()
+                    .attributes
+                    .push(RuleAttribute::Priority(priority));
+            }
+            if let Some((fw_mark, fw_mask)) = rule.fw_mark_mask {
+                req.message_mut()
+                    .attributes
+                    .push(RuleAttribute::FwMark(fw_mark));
+                req.message_mut()
+                    .attributes
+                    .push(RuleAttribute::FwMask(fw_mask));
+            }
+            if rule.v6 {
+                req.message_mut().header.family = AddressFamily::Inet6;
+            } else {
+                req.message_mut().header.family = AddressFamily::Inet;
+                // req.message_mut().
+            }
+            req.execute()
+                .await
+                .map_err(|e| Error::new(io::ErrorKind::Other, e.to_string()))?;
+        }
+        Ok(())
     }
 
     pub(crate) async fn list(&self) -> io::Result<Vec<Route>> {
@@ -364,5 +498,57 @@ impl RouteExt for RouteMessage {
                 }
             })
             .next()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use netlink_packet_route::IpProtocol;
+
+    use super::*;
+    use crate::Rule;
+
+    #[tokio::test]
+    async fn test_rule_list() {
+        // list all rules on linux
+        let handle = Handle::new().unwrap();
+        let res = handle.list_rules().await.unwrap();
+        for rule in res {
+            println!("{:?}", rule);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_rule_add() {
+        // list all rules on linux
+        let handle = Handle::new().unwrap();
+        let mut rule = Rule::default();
+        rule.dst = Some("8.8.8.8".parse().unwrap());
+        rule.table_id = Some(2001);
+        // rule.
+        let _ = handle.add_rules(vec![rule]).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_rule_del() {
+        // list all rules on linux
+        let handle = Handle::new().unwrap();
+        let mut rule = Rule::default();
+        rule.dst = Some("8.8.8.8".parse().unwrap());
+        rule.table_id = Some(2001);
+        // rule.
+        let _ = handle.delete_rules(vec![rule]).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_rule_add_icmp() {
+        // list all rules on linux
+        let handle = Handle::new().unwrap();
+        let mut rule = Rule::default();
+        rule.dst = Some("8.8.8.8".parse().unwrap());
+        rule.table_id = Some(2001);
+        rule.protocol = Some(IpProtocol::Icmp);
+        // rule.
+        let _ = handle.add_rules(vec![rule]).await.unwrap();
     }
 }
