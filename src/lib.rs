@@ -41,6 +41,7 @@ use std::{
 };
 
 mod platform_impl;
+#[cfg(target_os = "linux")]
 use netlink_packet_route::IpProtocol;
 use platform_impl::PlatformHandle;
 
