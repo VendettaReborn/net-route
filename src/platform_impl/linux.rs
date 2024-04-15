@@ -127,6 +127,11 @@ impl Handle {
                     .attributes
                     .push(RuleAttribute::FwMask(fw_mask));
             }
+            if let Some(suppress_prefixlength) = rule.suppress_prefixlength {
+                req.message_mut()
+                    .attributes
+                    .push(RuleAttribute::SuppressPrefixLen(suppress_prefixlength));
+            }
             if let Some(protocol) = rule.protocol {
                 req.message_mut()
                     .attributes
@@ -196,6 +201,11 @@ impl Handle {
                 req.message_mut()
                     .attributes
                     .push(RuleAttribute::FwMask(fw_mask));
+            }
+            if let Some(suppress_prefixlength) = rule.suppress_prefixlength {
+                req.message_mut()
+                    .attributes
+                    .push(RuleAttribute::SuppressPrefixLen(suppress_prefixlength));
             }
             if rule.v6 {
                 req.message_mut().header.family = AddressFamily::Inet6;
@@ -503,6 +513,19 @@ impl RouteExt for RouteMessage {
             })
             .next()
     }
+
+    // fn if_index(&self) -> Option<u32> {
+    //     self.attributes
+    //         .iter()
+    //         .flat_map(|attr| {
+    //             if let RouteAttribute::Oif(index) = attr {
+    //                 Some(*index)
+    //             } else {
+    //                 None
+    //             }
+    //         })
+    //         .next()
+    // }
 }
 
 #[cfg(test)]

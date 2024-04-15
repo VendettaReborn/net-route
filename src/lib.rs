@@ -241,6 +241,7 @@ pub struct Rule {
     pub priority: Option<u32>,
     pub fw_mark_mask: Option<(u32, u32)>,
     pub protocol: Option<IpProtocol>,
+    pub suppress_prefixlength: Option<u32>,
     pub v6: bool,
 }
 
