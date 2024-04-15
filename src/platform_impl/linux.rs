@@ -140,11 +140,11 @@ impl Handle {
                     .map_err(|e| Error::new(io::ErrorKind::Other, e.to_string()))?;
             } else {
                 let mut req = req.v4();
-                if let Some(src) = rule.src {
-                    req = req.source_prefix(src, 32);
+                if let Some((src, prefix)) = rule.src {
+                    req = req.source_prefix(src, prefix);
                 }
-                if let Some(dst) = rule.dst {
-                    req = req.destination_prefix(dst, 32);
+                if let Some((dst, prefix)) = rule.dst {
+                    req = req.destination_prefix(dst, prefix);
                 }
                 req.execute()
                     .await
@@ -162,12 +162,12 @@ impl Handle {
             if let Some(src) = rule.src {
                 req.message_mut()
                     .attributes
-                    .push(RuleAttribute::Source(IpAddr::V4(src)));
+                    .push(RuleAttribute::Source(IpAddr::V4(src.0)));
             }
             if let Some(dst) = rule.dst {
                 req.message_mut()
                     .attributes
-                    .push(RuleAttribute::Destination(IpAddr::V4(dst)));
+                    .push(RuleAttribute::Destination(IpAddr::V4(dst.0)));
             }
             if let Some(ifname) = rule.input_interface {
                 req.message_mut()
@@ -527,7 +527,7 @@ mod tests {
         // list all rules on linux
         let handle = Handle::new().unwrap();
         let mut rule = Rule::default();
-        rule.dst = Some("8.8.8.8".parse().unwrap());
+        rule.dst = Some(("8.8.8.8".parse().unwrap(), 32));
         rule.table_id = Some(2001);
         // rule.
         let _ = handle.add_rules(vec![rule]).await.unwrap();
@@ -538,7 +538,7 @@ mod tests {
         // list all rules on linux
         let handle = Handle::new().unwrap();
         let mut rule = Rule::default();
-        rule.dst = Some("8.8.8.8".parse().unwrap());
+        rule.dst = Some(("8.8.8.8".parse().unwrap(), 32));
         rule.table_id = Some(2001);
         // rule.
         let _ = handle.delete_rules(vec![rule]).await.unwrap();
@@ -549,7 +549,7 @@ mod tests {
         // list all rules on linux
         let handle = Handle::new().unwrap();
         let mut rule = Rule::default();
-        rule.dst = Some("8.8.8.8".parse().unwrap());
+        rule.dst = Some(("8.8.8.8".parse().unwrap(), 32));
         rule.table_id = Some(2001);
         rule.protocol = Some(IpProtocol::Icmp);
         // rule.

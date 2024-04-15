@@ -10,7 +10,7 @@ async fn main() -> std::io::Result<()> {
     {
         let handle = Handle::new().unwrap();
         let mut rule = Rule::default();
-        rule.dst = Some("8.8.8.8".parse().unwrap());
+        rule.dst = Some(("8.8.8.8".parse().unwrap(), 32));
         rule.table_id = Some(2001);
         let _ = handle.add_rules(vec![rule.clone()]).await.unwrap();
 

@@ -233,8 +233,8 @@ impl Route {
 #[cfg(target_os = "linux")]
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct Rule {
-    pub src: Option<Ipv4Addr>,
-    pub dst: Option<Ipv4Addr>,
+    pub src: Option<(Ipv4Addr, u8)>,
+    pub dst: Option<(Ipv4Addr, u8)>,
     pub input_interface: Option<String>,
     pub output_interface: Option<String>,
     pub table_id: Option<u32>,
