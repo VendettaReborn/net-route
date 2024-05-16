@@ -139,17 +139,31 @@ impl Handle {
             }
             req = req.replace();
             if rule.v6 {
-                req.v6()
-                    .execute()
+                let mut req = req.v6();
+                if let Some((src, prefix)) = rule.src {
+                    if let IpAddr::V6(src) = src {
+                        req = req.source_prefix(src, prefix);
+                    }
+                }
+                if let Some((dst, prefix)) = rule.dst {
+                    if let IpAddr::V6(dst) = dst {
+                        req = req.destination_prefix(dst, prefix);
+                    }
+                }
+                req.execute()
                     .await
                     .map_err(|e| Error::new(io::ErrorKind::Other, e.to_string()))?;
             } else {
                 let mut req = req.v4();
                 if let Some((src, prefix)) = rule.src {
-                    req = req.source_prefix(src, prefix);
+                    if let IpAddr::V4(src) = src {
+                        req = req.source_prefix(src, prefix);
+                    }
                 }
                 if let Some((dst, prefix)) = rule.dst {
-                    req = req.destination_prefix(dst, prefix);
+                    if let IpAddr::V4(dst) = dst {
+                        req = req.destination_prefix(dst, prefix);
+                    }
                 }
                 req.execute()
                     .await
@@ -167,12 +181,14 @@ impl Handle {
             if let Some(src) = rule.src {
                 req.message_mut()
                     .attributes
-                    .push(RuleAttribute::Source(IpAddr::V4(src.0)));
+                    .push(RuleAttribute::Source(src.0));
+                req.message_mut().header.src_len = src.1;
             }
             if let Some(dst) = rule.dst {
                 req.message_mut()
                     .attributes
-                    .push(RuleAttribute::Destination(IpAddr::V4(dst.0)));
+                    .push(RuleAttribute::Destination(dst.0));
+                req.message_mut().header.dst_len = dst.1;
             }
             if let Some(ifname) = rule.input_interface {
                 req.message_mut()
