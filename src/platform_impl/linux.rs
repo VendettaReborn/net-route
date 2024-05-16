@@ -229,7 +229,6 @@ impl Handle {
                 req.message_mut().header.family = AddressFamily::Inet6;
             } else {
                 req.message_mut().header.family = AddressFamily::Inet;
-                // req.message_mut().
             }
             match req.execute().await {
                 Ok(_) => (),
