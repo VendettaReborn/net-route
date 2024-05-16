@@ -174,7 +174,9 @@ impl Handle {
     }
 
     pub async fn delete_rules(&self, rules: Vec<Rule>) -> io::Result<()> {
+        let mut failed = vec![];
         for rule in rules {
+            let original_rule = rule.clone();
             let message = RuleMessage::default();
             let mut req = self.handle.rule().del(message);
             req.message_mut().header.action = netlink_packet_route::rule::RuleAction::ToTable;
@@ -229,9 +231,18 @@ impl Handle {
                 req.message_mut().header.family = AddressFamily::Inet;
                 // req.message_mut().
             }
-            req.execute()
-                .await
-                .map_err(|e| Error::new(io::ErrorKind::Other, e.to_string()))?;
+            match req.execute().await {
+                Ok(_) => (),
+                Err(e) => {
+                    failed.push((original_rule, e));
+                }
+            }
+        }
+        if !failed.is_empty() {
+            return Err(Error::new(
+                io::ErrorKind::Other,
+                format!("Failed to delete rules: {:?}", failed),
+            ));
         }
         Ok(())
     }
